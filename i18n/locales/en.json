@@ -1,0 +1,74 @@
+{
+  "navigation": {
+    "home": "Home",
+    "profile": "Profile",
+    "safety": "Safety",
+    "settings": "Settings"
+  },
+  "auth": {
+    "welcome": "Welcome to Tourist Safety",
+    "register": "Register",
+    "name": "Full Name",
+    "aadhaar": "Aadhaar/Passport Number",
+    "phone": "Phone Number",
+    "email": "Email Address",
+    "tripStart": "Trip Start Date",
+    "tripEnd": "Trip End Date",
+    "itinerary": "Places to Visit",
+    "emergencyContact": "Emergency Contact",
+    "contactName": "Contact Name",
+    "contactPhone": "Contact Phone",
+    "relationship": "Relationship",
+    "addContact": "Add Emergency Contact",
+    "createProfile": "Create Tourist Profile"
+  },
+  "home": {
+    "welcomeBack": "Welcome back",
+    "safetyScore": "Safety Score",
+    "currentLocation": "Current Location",
+    "panicButton": "Emergency SOS",
+    "viewId": "View Digital ID",
+    "trackingOn": "Tracking Enabled",
+    "trackingOff": "Tracking Disabled"
+  },
+  "panic": {
+    "title": "Emergency Alert",
+    "message": "Are you sure you want to send an emergency alert?",
+    "confirm": "Send Alert",
+    "cancel": "Cancel",
+    "sent": "Emergency alert sent successfully",
+    "failed": "Failed to send emergency alert"
+  },
+  "safety": {
+    "title": "Safety Status",
+    "score": "Your Safety Score",
+    "geofence": "Location Monitoring",
+    "anomaly": "Activity Monitoring",
+    "safeZone": "You are in a safe zone",
+    "dangerZone": "Warning: You are in a restricted area",
+    "exitZone": "Please exit this area immediately"
+  },
+  "profile": {
+    "digitalId": "Digital Tourist ID",
+    "scanCode": "Scan this QR code for verification",
+    "validUntil": "Valid until",
+    "emergencyContacts": "Emergency Contacts",
+    "itinerary": "Your Itinerary"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "tracking": "Location Tracking",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "support": "Help & Support",
+    "logout": "Logout"
+  },
+  "alerts": {
+    "locationPermission": "Location permission is required for safety features",
+    "trackingStarted": "Location tracking started",
+    "trackingStopped": "Location tracking stopped",
+    "dangerZone": "You have entered a restricted area",
+    "anomalyDetected": "Unusual activity detected"
+  }
+}
