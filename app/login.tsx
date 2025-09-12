@@ -1,4 +1,3 @@
-// app/login.tsx
 import React, { useState } from "react";
 import {
   Text,
@@ -8,6 +7,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { router } from "expo-router";
@@ -18,16 +18,19 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const onSubmit = async () => {
+  const handleLogin = async () => {
     if (!email || !password) {
-      return Alert.alert("Enter both email and password");
+      return Alert.alert("Validation", "Email and password are required");
     }
+
+    setIsLoading(true);
     try {
-      setIsLoading(true);
       await login(email, password);
+
+      // ✅ Redirect into the (tabs) layout (shows bottom tab bar)
       router.replace("/(tabs)");
     } catch (err: any) {
-      Alert.alert("Login failed", err.message || String(err));
+      Alert.alert("Login Failed", err.message || "Something went wrong");
     } finally {
       setIsLoading(false);
     }
@@ -36,58 +39,68 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1, justifyContent: "center", padding: 16 }}
+      style={{ flex: 1 }}
     >
-      <Text style={styles.title}>Login</Text>
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        autoCapitalize="none"
-      />
-      <TextInput
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-      />
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>Login</Text>
 
-      <TouchableOpacity
-        style={styles.loginBtn}
-        onPress={onSubmit}
-        disabled={isLoading}
-      >
-        <Text style={styles.loginText}>
-          {isLoading ? "Logging in..." : "Login"}
-        </Text>
-      </TouchableOpacity>
+        <TextInput
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          style={styles.input}
+        />
 
-      <TouchableOpacity onPress={() => router.push("/register")}>
-        <Text style={{ textAlign: "center", marginTop: 16 }}>
-          Don’t have an account? Register
-        </Text>
-      </TouchableOpacity>
+        <TextInput
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          style={styles.input}
+        />
+
+        <TouchableOpacity
+          style={[styles.button, isLoading && { opacity: 0.7 }]}
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>
+            {isLoading ? "Logging in..." : "Login"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => router.push("/register")}>
+          <Text style={styles.link}>Don't have an account? Register</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 20, textAlign: "center" },
+  container: { flexGrow: 1, justifyContent: "center", padding: 16 },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 24,
+    textAlign: "center",
+  },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 8,
-    marginTop: 12,
-    padding: 10,
+    padding: 12,
+    marginBottom: 16,
   },
-  loginBtn: {
-    marginTop: 20,
-    backgroundColor: "#4CAF50",
+  button: {
+    backgroundColor: "#2196F3",
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
+    marginBottom: 12,
   },
-  loginText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  link: { textAlign: "center", color: "#2196F3", marginTop: 8 },
 });

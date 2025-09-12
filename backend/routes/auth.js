@@ -1,16 +1,16 @@
+// backend/routes/auth.js
 import express from "express";
 import multer from "multer";
-import { registerTourist } from "../models/Tourist.js";
-import {
-  encrypt,
-  decrypt,
-  hashDataSHA256,
-} from "../../utils/cryptoUtils.js"; // ✅ Correct import
+import bcrypt from "bcryptjs";
+import { registerTourist, findTouristByEmail } from "../models/Tourist.js";
+import { encrypt } from "../../utils/cryptoUtils.js";
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-// ✅ Dummy KYC verification endpoint
+/**
+ * ✅ Dummy KYC verification endpoint
+ */
 router.post("/kyc-verify", upload.single("kycImage"), async (req, res) => {
   try {
     const dummyKYC = {
@@ -25,15 +25,22 @@ router.post("/kyc-verify", upload.single("kycImage"), async (req, res) => {
   }
 });
 
-// ✅ Registration endpoint
+/**
+ * ✅ Registration endpoint
+ */
 router.post("/register-multipart", upload.single("kycImage"), async (req, res) => {
   try {
     const body = req.body;
 
+    // Hash password before saving
+    const passwordHash = body.password
+      ? await bcrypt.hash(body.password, 10)
+      : null;
+
     const tourist = {
       name: body.name,
       email: body.email,
-      passwordHash: body.password, // TODO: hash with bcrypt
+      password: passwordHash,   // ✅ consistent field name
       phone: body.phone,
       aadhaarPassport: body.aadhaarPassport
         ? encrypt(body.aadhaarPassport)
@@ -54,10 +61,47 @@ router.post("/register-multipart", upload.single("kycImage"), async (req, res) =
     };
 
     const newUser = await registerTourist(tourist);
-    return res.json({ user: newUser, token: "dummy-token" });
+    return res.json({ ok: true, user: newUser, token: "dummy-token" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || "Registration failed" });
+    res
+      .status(500)
+      .json({ ok: false, error: err.message || "Registration failed" });
+  }
+});
+
+/**
+ * ✅ Login endpoint
+ */
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Lookup tourist in DB
+    const tourist = await findTouristByEmail(email);
+    if (!tourist) {
+      return res.status(401).json({ ok: false, error: "User not found" });
+    }
+
+    // Compare password with hashed password in DB
+    const valid = await bcrypt.compare(password, tourist.password);
+    if (!valid) {
+      return res.status(401).json({ ok: false, error: "Invalid credentials" });
+    }
+
+    // Return dummy token for now
+    return res.json({
+      ok: true,
+      user: {
+        id: tourist.id,
+        name: tourist.name,
+        email: tourist.email,
+      },
+      token: "dummy-token",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "Login failed" });
   }
 });
 

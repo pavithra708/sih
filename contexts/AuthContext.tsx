@@ -3,12 +3,12 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface TouristProfile {
-  id: string | number;
+  id: string; // ✅ always store as string
   name: string;
   email: string;
   phone?: string;
   digitalId?: any;
-  isTrackingEnabled?: boolean; // ✅ added so LocationContext can update this
+  isTrackingEnabled?: boolean;
 }
 
 interface AuthContextType {
@@ -23,7 +23,7 @@ interface AuthContextType {
   ) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
-  updateTourist: (updates: Partial<TouristProfile>) => Promise<void>; // ✅ added
+  updateTourist: (updates: Partial<TouristProfile>) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,7 +44,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const userStr = await AsyncStorage.getItem("user");
         const tkn = await SecureStore.getItemAsync("token");
-        if (userStr) setTourist(JSON.parse(userStr));
+        if (userStr) {
+          const parsed = JSON.parse(userStr);
+          setTourist({ ...parsed, id: String(parsed.id) }); // ✅ normalize id
+        }
         if (tkn) setToken(tkn);
       } catch (e) {
         console.warn("Auth load error", e);
@@ -54,28 +57,52 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     })();
   }, []);
 
+  const SERVER_IP = "192.168.19.170"; // ✅ replace with your PC's LAN IP
+  const SERVER_PORT = "5000";
+
   const login = async (email: string, password: string) => {
-    const res = await fetch("http://<YOUR_SERVER_IP>:4000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "Login failed");
+    try {
+      const res = await fetch(`http://${SERVER_IP}:${SERVER_PORT}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Login failed. Check server connection.");
+      }
+
+      const { user, token: tkn } = await res.json();
+
+      // ✅ Normalize id
+      const normalizedUser: TouristProfile = {
+        ...user,
+        id: String(user.id),
+      };
+
+      setTourist(normalizedUser);
+      setToken(tkn);
+      await AsyncStorage.setItem("user", JSON.stringify(normalizedUser));
+      await SecureStore.setItemAsync("token", tkn);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      throw new Error(error.message || "Network request failed");
     }
-    const { user, token: tkn } = await res.json();
-    setTourist(user);
-    setToken(tkn);
-    await AsyncStorage.setItem("user", JSON.stringify(user));
-    await SecureStore.setItemAsync("token", tkn);
   };
 
   const register = async (user: TouristProfile, token: string, encryptedPrivateKey?: string) => {
-    setTourist(user);
+    // ✅ Normalize id
+    const normalizedUser: TouristProfile = {
+      ...user,
+      id: String(user.id),
+    };
+
+    setTourist(normalizedUser);
     setToken(token);
-    await AsyncStorage.setItem("user", JSON.stringify(user));
+    await AsyncStorage.setItem("user", JSON.stringify(normalizedUser));
     await SecureStore.setItemAsync("token", token);
+
     if (encryptedPrivateKey) {
       await SecureStore.setItemAsync("encryptedPrivateKey", encryptedPrivateKey);
     }
@@ -91,7 +118,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateTourist = async (updates: Partial<TouristProfile>) => {
     if (!tourist) return;
-    const updated = { ...tourist, ...updates };
+
+    // ✅ Normalize id again
+    const updated: TouristProfile = {
+      ...tourist,
+      ...updates,
+      id: String(updates.id ?? tourist.id),
+    };
+
     setTourist(updated);
     await AsyncStorage.setItem("user", JSON.stringify(updated));
   };
