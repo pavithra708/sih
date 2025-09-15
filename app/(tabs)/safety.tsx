@@ -23,7 +23,7 @@ export default function SafetyScreen() {
 
   useEffect(() => {
     if (currentLocation) {
-      checkCurrentZone();
+      checkCurrentZone();  
     } else {
       setCurrentZone(null);
     }

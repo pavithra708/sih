@@ -1,10 +1,13 @@
-// src/utils/AppPermissions.ts
-import * as ImagePicker from "expo-image-picker";
+import { Camera } from "expo-camera";
 import * as Location from "expo-location";
-import * as Permissions from "expo-permissions";
 
 export async function requestCameraPermission() {
-  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  const { status } = await Camera.requestCameraPermissionsAsync();
+  return status === "granted";
+}
+
+export async function requestMicrophonePermission() {
+  const { status } = await Camera.requestMicrophonePermissionsAsync();
   return status === "granted";
 }
 

@@ -1,0 +1,34 @@
+[
+  {
+    "roadId": "NH44-BLR",
+    "city": "Bangalore",
+    "state": "Karnataka",
+    "lat": 12.9716,
+    "lon": 77.5946,
+    "safetyScore": 65
+  },
+  {
+    "roadId": "NH48-Mumbai",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "lat": 19.076,
+    "lon": 72.8777,
+    "safetyScore": 45
+  },
+  {
+    "roadId": "ECR-Chennai",
+    "city": "Chennai",
+    "state": "Tamil Nadu",
+    "lat": 13.0827,
+    "lon": 80.2707,
+    "safetyScore": 75
+  },
+  {
+    "roadId": "NH65-Hyd",
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "lat": 17.385,
+    "lon": 78.4867,
+    "safetyScore": 55
+  }
+]

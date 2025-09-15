@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Taj Mahal",
+    "city": "Agra",
+    "state": "Uttar Pradesh",
+    "lat": 27.1751,
+    "lon": 78.0421,
+    "radius": 2,
+    "risk": "high"
+  },
+  {
+    "name": "India Gate",
+    "city": "Delhi",
+    "state": "Delhi",
+    "lat": 28.6129,
+    "lon": 77.2295,
+    "radius": 1.5,
+    "risk": "medium"
+  },
+  {
+    "name": "Gateway of India",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "lat": 18.922,
+    "lon": 72.8347,
+    "radius": 1.5,
+    "risk": "medium"
+  },
+  {
+    "name": "Mysore Palace",
+    "city": "Mysore",
+    "state": "Karnataka",
+    "lat": 12.3051,
+    "lon": 76.6552,
+    "radius": 1.5,
+    "risk": "low"
+  }
+]

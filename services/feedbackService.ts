@@ -1,20 +1,28 @@
-// services/feedbackService.ts
+// services/feedbackService.js
+import axios from "axios";
 
-type FeedbackType = 'true-positive' | 'false-positive';
+const BASE_URL = "http://YOUR_SERVER/api/feedback";
 
-interface FeedbackEntry {
-  alertId: string;
-  level: 'yellow' | 'red';
-  timestamp: number;
-  feedback: FeedbackType;
-  scoreAtTrigger: number;
-}
-
-const feedbackStore: FeedbackEntry[] = [];
-
-export const submitFeedback = (entry: FeedbackEntry) => {
-  feedbackStore.push(entry);
-  console.log('[Feedback] Recorded:', entry);
+export const submitFeedback = async (alertId, isTrueAlert, reason) => {
+  try {
+    const res = await axios.post(`${BASE_URL}/submit`, {
+      alertId,
+      isTrueAlert,
+      reason,
+    });
+    return res.data;
+  } catch (err) {
+    console.error("Feedback submission failed:", err);
+    throw err;
+  }
 };
 
-export const getFeedbackHistory = () => feedbackStore;
+export const fetchFeedback = async () => {
+  try {
+    const res = await axios.get(`${BASE_URL}/all`);
+    return res.data; // array of feedback
+  } catch (err) {
+    console.error("Fetching feedback failed:", err);
+    return [];
+  }
+};

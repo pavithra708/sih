@@ -1,65 +1,56 @@
 // services/scoreService.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type RiskType =
-  | 'high-risk'
-  | 'off-itinerary'
-  | 'inactive'
-  | 'panic'
-  | 'signal-lost';
+const STORAGE_KEY = "@worry_score";
 
-type RiskEvent = {
-  type: RiskType;
-  timestamp: number;
-  scoreDelta: number;
+// in-memory score
+let inMemoryScore = 0;
+
+// Police feedback adjustments
+let feedbackAdjustments: { [key: string]: number } = {};
+
+// Apply feedback from police
+export const applyFeedback = (feedbackList: any[]) => {
+  feedbackAdjustments = {};
+  feedbackList.forEach((f) => {
+    if (!f.isTrueAlert) {
+      feedbackAdjustments[f.reason] = -0.5; // reduce score
+    } else {
+      feedbackAdjustments[f.reason] = 0.5; // increase score
+    }
+  });
 };
 
-type AlertLevel = 'green' | 'yellow' | 'red';
+// Get adjustment for a given reason
+export const getAdjustment = (reason: string) => feedbackAdjustments[reason] || 0;
 
-const SCORE_RULES: Record<RiskType, number> = {
-  'high-risk': 1,
-  'off-itinerary': 2,
-  'inactive': 0.5,
-  'panic': 100,
-  'signal-lost': 50,
+// Add score with optional event string
+export const addScore = async (inc: number | string) => {
+  let numeric = 0;
+
+  if (typeof inc === "number") numeric = inc;
+  else if (inc === "panic") numeric = 50;
+  else if (inc === "signal-lost") numeric = 20;
+  else if (inc === "off-itinerary") numeric = 10;
+  else numeric = 0;
+
+  inMemoryScore = Math.min(200, Math.max(0, inMemoryScore + numeric));
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, String(inMemoryScore));
+  } catch (e) {
+    console.warn("AsyncStorage setItem failed:", e);
+  }
 };
 
-const alertThresholds = {
-  yellow: 20,
-  red: 80,
-};
+// Get current score
+export const getScore = (): number => inMemoryScore;
 
-let currentScore = 0;
-let eventLog: RiskEvent[] = [];
-
-export const getScore = () => currentScore;
-
-export const getEventLog = () => [...eventLog];
-
-export const resetScore = () => {
-  currentScore = 0;
-  eventLog = [];
-};
-
-export const addScore = (type: RiskType): number => {
-  const delta = SCORE_RULES[type];
-  const timestamp = Date.now();
-
-  currentScore += delta;
-  eventLog.push({ type, timestamp, scoreDelta: delta });
-
-  return currentScore;
-};
-
-export const getAlertLevel = (): AlertLevel => {
-  if (currentScore > alertThresholds.red) return 'red';
-  if (currentScore > alertThresholds.yellow) return 'yellow';
-  return 'green';
-};
-
-// Optional: decay score over time
-export const decayScore = (rate: number = 1): void => {
-  // Reduce score gradually (e.g., every minute)
-  if (currentScore > 0) {
-    currentScore = Math.max(0, currentScore - rate);
+// Reset score
+export const resetScore = async () => {
+  inMemoryScore = 0;
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, "0");
+  } catch (e) {
+    console.warn("AsyncStorage reset failed:", e);
   }
 };

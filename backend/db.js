@@ -10,7 +10,7 @@ const dbPromise = open({
 export async function initDB() {
   const db = await dbPromise;
 
-  // ✅ Users table with constraints
+  // ✅ Users table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,18 +32,20 @@ export async function initDB() {
     )
   `);
 
-  // ✅ Indexes for quick lookup
+  // ✅ Indexes
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
   await db.exec(`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)`);
 
-  // ✅ Alerts table
+  // ✅ Alerts table (FIXED: added blockchainHash, policeFeedback, createdAt)
   await db.exec(`
     CREATE TABLE IF NOT EXISTS alerts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId INTEGER NOT NULL,
       message TEXT NOT NULL,
       location TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      blockchainHash TEXT,
+      policeFeedback TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
@@ -63,7 +65,7 @@ export async function initDB() {
   console.log("✅ Database initialized with secure schema");
 }
 
-// Run init only if file is executed directly (not when imported)
+// Run init only if executed directly
 if (process.env.NODE_ENV !== "test") {
   initDB().catch((err) => {
     console.error("❌ Failed to init DB:", err);

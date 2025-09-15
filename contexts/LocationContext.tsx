@@ -1,37 +1,47 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import * as Location from "expo-location";
-import { Location as LocationType, Alert } from "../types";
-import { useAuth } from "./AuthContext";
+// contexts/LocationContext.tsx
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import * as ExpoLocation from "expo-location";
 import { apiService } from "../services/apiService";
-import { geofenceService } from "../services/geofenceService";
 import { addScore } from "../services/scoreService";
 import { useInactivityTracker } from "../hooks/useInactivityTracker";
 import { isOffItinerary } from "../utils/itineraryUtils";
+import { useAuth } from "./AuthContext";
+import { geofenceService } from "../services/geofenceService";
+
+export interface Location {
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+}
 
 interface LocationContextType {
-  currentLocation: LocationType | null;
+  currentLocation: Location | null;
   isTracking: boolean;
   startTracking: () => Promise<void>;
   stopTracking: () => Promise<void>;
   sendPanicAlert: () => Promise<void>;
   safetyScore: number;
   updateSafetyScore: (score: number) => void;
+  isOffline: boolean;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
 export const useLocation = () => {
-  const context = useContext(LocationContext);
-  if (!context) throw new Error("useLocation must be used within a LocationProvider");
-  return context;
+  const ctx = useContext(LocationContext);
+  if (!ctx) throw new Error("useLocation must be used within a LocationProvider");
+  return ctx;
 };
 
-export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentLocation, setCurrentLocation] = useState<LocationType | null>(null);
-  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
+export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { tourist } = useAuth() as any;
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
   const [isTracking, setIsTracking] = useState(false);
   const [safetyScore, setSafetyScore] = useState(80);
-  const { tourist, updateTourist } = useAuth();
+  const [isOffline, setIsOffline] = useState(false);
+
+  const watchRef = useRef<ExpoLocation.LocationSubscription | null>(null);
 
   const plannedRoute = [
     { latitude: 12.9716, longitude: 77.5946 },
@@ -39,41 +49,46 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
     { latitude: 12.9735, longitude: 77.597 },
   ];
 
-  // inactivity monitor
   useInactivityTracker(currentLocation);
 
   useEffect(() => {
     requestPermissions();
+    return () => {
+      if (watchRef.current?.remove) watchRef.current.remove();
+      watchRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
-    if (tourist?.isTrackingEnabled && !isTracking) {
-      startTracking();
-    }
-  }, [tourist?.isTrackingEnabled]);
+    const offCheck = setInterval(() => {
+      if (Date.now() - lastUpdateTime > 2 * 60 * 1000) setIsOffline(true);
+      else setIsOffline(false);
+    }, 30 * 1000);
+    return () => clearInterval(offCheck);
+  }, [lastUpdateTime]);
 
   const requestPermissions = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === "granted") {
-      getCurrentLocation();
+    try {
+      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        await getCurrentLocation();
+      } else {
+        console.warn("Location permission not granted");
+      }
+    } catch (err) {
+      console.error("requestPermissions error:", err);
     }
   };
 
-  const getCurrentLocation = async () => {
+  const getCurrentLocation = async (): Promise<Location | null> => {
     try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const newLocation: LocationType = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        timestamp: Date.now(),
-      };
-      setCurrentLocation(newLocation);
+      const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
+      const newLoc: Location = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, timestamp: Date.now() };
+      setCurrentLocation(newLoc);
       setLastUpdateTime(Date.now());
-      return newLocation;
-    } catch (error) {
-      console.error("Error getting current location:", error);
+      return newLoc;
+    } catch (err) {
+      console.error("Error getting current location:", err);
       return null;
     }
   };
@@ -81,90 +96,75 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
   const startTracking = async () => {
     if (isTracking) return;
     setIsTracking(true);
+    try {
+      const subscription = await ExpoLocation.watchPositionAsync(
+        { accuracy: ExpoLocation.Accuracy.High, timeInterval: 30 * 1000, distanceInterval: 10 },
+        (location) => {
+          const newLocation: Location = { latitude: location.coords.latitude, longitude: location.coords.longitude, timestamp: Date.now() };
+          setCurrentLocation(newLocation);
+          setLastUpdateTime(Date.now());
 
-    await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5 * 60 * 1000,
-        distanceInterval: 100,
-      },
-      (location) => {
-        const newLocation: LocationType = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          timestamp: Date.now(),
-        };
-        setCurrentLocation(newLocation);
-        setLastUpdateTime(Date.now());
-
-        if (tourist) {
-          apiService.updateLocation(tourist.id, newLocation);
+          if (apiService.updateLocation) {
+            apiService.updateLocation(tourist?.id ?? null, newLocation).catch((err: any) => console.warn("updateLocation failed:", err));
+          }
         }
-      }
-    );
-
-    if (tourist) {
-      await updateTourist({ isTrackingEnabled: true });
+      );
+      watchRef.current = subscription;
+    } catch (err) {
+      console.error("startTracking watchPositionAsync error:", err);
+      setIsTracking(false);
     }
   };
 
   const stopTracking = async () => {
     setIsTracking(false);
-    if (tourist) {
-      await updateTourist({ isTrackingEnabled: false });
-      await apiService.stopTracking(tourist.id);
+    try {
+      if (watchRef.current?.remove) watchRef.current.remove();
+      watchRef.current = null;
+    } catch (err) {
+      console.warn("stopTracking cleanup error:", err);
     }
   };
 
   const sendPanicAlert = async () => {
     const location = await getCurrentLocation();
-    if (location && tourist) {
-      const alert: Alert = {
-        type: "panic",
-        location,
-        message: "Emergency panic button pressed",
-        timestamp: Date.now(),
-      };
-      try {
-        await apiService.sendPanicAlert(tourist.id, alert);
-        if (!isTracking) {
-          await startTracking();
-        }
-        addScore("panic");
-      } catch (error) {
-        console.error("Failed to send panic alert:", error);
+    if (!location) return;
+    const alert = { type: "panic", location, message: "Emergency panic button pressed", timestamp: Date.now() };
+    try {
+      if (apiService.sendPanicAlert) {
+        await apiService.sendPanicAlert(tourist?.id ?? null, alert);
       }
+      if (!isTracking) await startTracking();
+      addScore("panic" as any);
+    } catch (err) {
+      console.error("Failed to send panic alert:", err);
     }
   };
 
-  const updateSafetyScore = (score: number) => {
-    setSafetyScore(Math.max(0, Math.min(100, score)));
-  };
+  const updateSafetyScore = (score: number) => setSafetyScore(Math.max(0, Math.min(100, score)));
 
-  // lost signal in risky area
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       const timeDiff = (now - lastUpdateTime) / 1000;
       if (timeDiff > 60 && currentLocation) {
-        const zone = geofenceService.checkLocation(currentLocation);
+        const zone = geofenceService.checkLocation(currentLocation as any);
         if (zone?.riskLevel === "high") {
           console.warn("[ALERT] Signal lost in high-risk area");
-          addScore("signal-lost");
+          addScore("signal-lost" as any);
         }
       }
     }, 60 * 1000);
     return () => clearInterval(interval);
   }, [lastUpdateTime, currentLocation]);
 
-  // off itinerary
   useEffect(() => {
     const interval = setInterval(() => {
       if (currentLocation && plannedRoute.length > 0) {
-        const offRoute = isOffItinerary(currentLocation, plannedRoute, 100);
+        const offRoute = isOffItinerary(currentLocation as any, plannedRoute, 100);
         if (offRoute) {
           console.warn("[ALERT] Off-Itinerary Detected");
-          addScore("off-itinerary");
+          addScore("off-itinerary" as any);
         }
       }
     }, 60 * 1000);
@@ -172,17 +172,7 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [currentLocation]);
 
   return (
-    <LocationContext.Provider
-      value={{
-        currentLocation,
-        isTracking,
-        startTracking,
-        stopTracking,
-        sendPanicAlert,
-        safetyScore,
-        updateSafetyScore,
-      }}
-    >
+    <LocationContext.Provider value={{ currentLocation, isTracking, startTracking, stopTracking, sendPanicAlert, safetyScore, updateSafetyScore, isOffline }}>
       {children}
     </LocationContext.Provider>
   );

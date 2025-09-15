@@ -1,93 +1,46 @@
-import axios from 'axios';
-import { TouristProfile, Alert, Location, ApiResponse } from '../types';
+// services/apiService.ts
+const API_BASE = "http://192.168.19.170:5000"; // replace with your backend
 
-// Replace with your actual backend URL
-const API_BASE_URL = 'https://your-backend-url.com/api';
-
-class ApiService {
-  private api;
-
-  constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-  }
-
-  async registerTourist(tourist: Omit<TouristProfile, 'id'>): Promise<ApiResponse<TouristProfile>> {
+export const apiService = {
+  updateLocation: async (touristId: string | number | null, location: any) => {
     try {
-      const response = await this.api.post('/register', tourist);
-      return { success: true, data: response.data };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Registration failed' };
+      const res = await fetch(`${API_BASE}/api/location/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ touristId, location }),
+      });
+      return res.ok ? res.json() : null;
+    } catch (e) {
+      console.warn("apiService.updateLocation failed", e);
+      throw e;
     }
-  }
+  },
 
-  async getTouristById(id: string): Promise<ApiResponse<TouristProfile>> {
+  sendPanicAlert: async (touristId: string | number | null, alert: any) => {
     try {
-      const response = await this.api.get(`/id/${id}`);
-      return { success: true, data: response.data };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to fetch tourist data' };
+      const res = await fetch(`${API_BASE}/api/alerts/panic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ touristId, alert }),
+      });
+      return res.ok ? res.json() : null;
+    } catch (e) {
+      console.warn("apiService.sendPanicAlert failed", e);
+      throw e;
     }
-  }
+  },
 
-  async sendPanicAlert(touristId: string, alert: Alert): Promise<ApiResponse<void>> {
+  sendFeedback: async (alertId: string, feedback: { isTruePositive: boolean; notes?: string }) => {
     try {
-      await this.api.post('/alert/panic', { touristId, ...alert });
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to send panic alert' };
+      const res = await fetch(`${API_BASE}/api/alerts/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alertId, feedback }),
+      });
+      return res.ok ? res.json() : null;
+    } catch (e) {
+      console.warn("apiService.sendFeedback failed", e);
+      throw e;
     }
-  }
-
-  async sendGeofenceAlert(touristId: string, alert: Alert): Promise<ApiResponse<void>> {
-    try {
-      await this.api.post('/alert/geofence', { touristId, ...alert });
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to send geofence alert' };
-    }
-  }
-
-  async sendAnomalyAlert(touristId: string, alert: Alert): Promise<ApiResponse<void>> {
-    try {
-      await this.api.post('/alert/anomaly', { touristId, ...alert });
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to send anomaly alert' };
-    }
-  }
-
-  async startTracking(touristId: string): Promise<ApiResponse<void>> {
-    try {
-      await this.api.post('/tracking/start', { touristId });
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to start tracking' };
-    }
-  }
-
-  async stopTracking(touristId: string): Promise<ApiResponse<void>> {
-    try {
-      await this.api.post('/tracking/stop', { touristId });
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to stop tracking' };
-    }
-  }
-
-  async updateLocation(touristId: string, location: Location): Promise<ApiResponse<void>> {
-    try {
-      await this.api.post('/location/update', { touristId, location });
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to update location' };
-    }
-  }
-}
-
-export const apiService = new ApiService();
+  },
+};
