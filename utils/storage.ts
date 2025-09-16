@@ -1,15 +1,30 @@
-// utils/storage.ts
-import * as FileSystem from "expo-file-system";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const OFFLINE_DIR = FileSystem.documentDirectory + "offline/";
-
-export async function saveOfflineData(fileName: string, data: any) {
+export async function saveOfflineData(key: string, data: any) {
   try {
-    await FileSystem.makeDirectoryAsync(OFFLINE_DIR, { intermediates: true });
-    const path = OFFLINE_DIR + fileName;
-    await FileSystem.writeAsStringAsync(path, JSON.stringify(data));
-    console.log("✅ Offline data saved:", path);
+    await AsyncStorage.setItem(key, JSON.stringify(data));
+    console.log("✅ Offline data saved:", key);
   } catch (err) {
-    console.error("❌ Error saving offline data:", err);
+    console.error("❌ saveOfflineData error:", err);
+  }
+}
+
+export async function getAllOfflineData() {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const offlineKeys = keys.filter(k => k.startsWith("offline_"));
+    const items = await AsyncStorage.multiGet(offlineKeys);
+    return items.map(([key, value]) => ({ key, data: JSON.parse(value!) }));
+  } catch (err) {
+    console.error("❌ getAllOfflineData error:", err);
+    return [];
+  }
+}
+
+export async function removeOfflineData(key: string) {
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch (err) {
+    console.error("❌ removeOfflineData error:", err);
   }
 }

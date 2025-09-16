@@ -1,17 +1,21 @@
+// contexts/SafetyContext.tsx
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import * as Location from "expo-location";
 import { geofenceService } from "../services/geofenceService";
 import { anomalyService } from "../services/anomalyService";
 import { addScore, getScore, resetScore } from "../services/scoreService";
-import { saveOfflineData } from "../utils/storage";
 import { useLocation } from "./LocationContext";
-import { sendSOS } from "../utils/sendSOS";
+import { useAuth } from "./AuthContext";
+import { triggerSOS } from "../services/sosService";
 
 type SafetyContextType = {
   worryScore: number;
   showPrompt: boolean;
+  sosStatus: string;
   setShowPrompt: (v: boolean) => void;
   handlePromptYes: () => void;
   handlePromptNo: (autoTimeout?: boolean) => Promise<void>;
+  handlePromptIgnore: () => void;
   triggerManualSOS: () => void;
   acknowledgeSafe: () => void;
 };
@@ -19,30 +23,47 @@ type SafetyContextType = {
 const SafetyContext = createContext<SafetyContextType | undefined>(undefined);
 
 export const SafetyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentLocation, isOffline, destination, userId } = useLocation();
+  const { currentLocation, destination } = useLocation();
+  const { tourist } = useAuth();
+  const userId = tourist?.id;
+
   const [worryScore, setWorryScore] = useState<number>(getScore() ?? 0);
   const [showPrompt, setShowPrompt] = useState(false);
-  const ignoreUntilRef = useRef<number>(0); // timestamp to ignore for 10 min
+  const [sosStatus, setSosStatus] = useState<string>("");
+  const ignoreUntilRef = useRef<number>(0);
   const isHandlingEmergency = useRef(false);
 
-  // Main risk monitoring
+  // Get latest GPS location
+  const getCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") throw new Error("Location permission denied");
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+    } catch (err) {
+      console.error("Failed to get location:", err);
+      return null;
+    }
+  };
+
+  // Risk monitoring
   useEffect(() => {
     const interval = setInterval(async () => {
-      if (!currentLocation) return;
-
-      const now = Date.now();
-      if (now < ignoreUntilRef.current) return; // ignore active
+      const loc = currentLocation ?? (await getCurrentLocation());
+      if (!loc) return;
+      if (Date.now() < ignoreUntilRef.current) return;
 
       let increment = 0;
-      const zone = geofenceService.checkLocation(currentLocation);
+      const zone = geofenceService.checkLocation(loc);
 
       if (zone?.riskLevel === "high") increment += 2;
       else if (zone?.riskLevel === "medium") increment += 1;
 
-      if (anomalyService.isStationaryTooLong(currentLocation)) increment += 0.5;
+      if (anomalyService.isStationaryTooLong(loc)) increment += 0.5;
 
       if (destination) {
-        const dist = metersBetween(currentLocation, destination);
+        const dist = metersBetween(loc, destination);
         if (dist > 20) increment += 1;
       }
 
@@ -50,15 +71,14 @@ export const SafetyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const score = getScore();
       setWorryScore(score);
 
-      // Show prompt for medium/high or score>=80
       if ((zone?.riskLevel === "medium" || zone?.riskLevel === "high") || score >= 80) {
         setShowPrompt(true);
 
-        // Auto SOS for red/high zones or score>=80
+        // Auto SOS for high risk
         if ((zone?.riskLevel === "high" || score >= 80) && !isHandlingEmergency.current) {
           isHandlingEmergency.current = true;
           setTimeout(async () => {
-            await triggerEmergencyFlow("High risk / red zone timeout");
+            await triggerEmergencyFlow("High risk / auto SOS");
             isHandlingEmergency.current = false;
           }, 10000);
         }
@@ -66,7 +86,7 @@ export const SafetyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [currentLocation, destination, isOffline, userId]);
+  }, [currentLocation, destination, userId]);
 
   const acknowledgeSafe = async () => {
     await resetScore();
@@ -77,33 +97,45 @@ export const SafetyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const handlePromptYes = async () => acknowledgeSafe();
 
   const handlePromptNo = async (autoTimeout = false) => {
+    setSosStatus("Fetching location...");
+    await triggerEmergencyFlow(autoTimeout ? "auto timeout" : "user indicated unsafe");
     setShowPrompt(false);
-    await triggerEmergencyFlow(autoTimeout ? "timeout" : "user_no");
   };
 
-  const triggerManualSOS = () => setShowPrompt(true);
+  const handlePromptIgnore = () => {
+    ignoreUntilRef.current = Date.now() + 10 * 60 * 1000;
+    setShowPrompt(false);
+    console.log("⏸️ Ignored until:", new Date(ignoreUntilRef.current).toLocaleTimeString());
+  };
+
+  const triggerManualSOS = async () => {
+    setShowPrompt(true);
+    setSosStatus("Fetching location...");
+    await triggerEmergencyFlow("Manual SOS");
+  };
 
   const triggerEmergencyFlow = async (reason: string) => {
-    try {
-      const alertEvent = {
-        ts: Date.now(),
-        reason,
-        worryScore: getScore(),
-        location: currentLocation,
-      };
+    if (!userId) {
+      setSosStatus("⚠️ SOS failed: missing user");
+      return;
+    }
 
-      if (isOffline) {
-        await saveOfflineData(`offline_alert_${alertEvent.ts}.json`, alertEvent);
-      } else {
-        await sendSOS(userId, `Emergency triggered: ${reason}`);
-      }
-    } catch (err) {
-      console.error("triggerEmergencyFlow error:", err);
-      await saveOfflineData(`offline_alert_${Date.now()}.json`, {
-        ts: Date.now(),
-        reason,
-        location: currentLocation,
-      });
+    const loc = currentLocation ?? (await getCurrentLocation());
+    if (!loc) {
+      setSosStatus("⚠️ SOS failed: location unavailable");
+      return;
+    }
+
+    setSosStatus("Sending SOS...");
+    try {
+      await triggerSOS(userId, worryScore, reason, loc);
+      setSosStatus("✅ SOS sent successfully!");
+      console.log("✅ SOS sent:", reason);
+    } catch (err: any) {
+      console.error("❌ SOS failed:", err);
+      setSosStatus("⚠️ SOS saved offline, will sync later");
+    } finally {
+      setTimeout(() => setSosStatus(""), 5000);
     }
   };
 
@@ -112,9 +144,11 @@ export const SafetyProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       value={{
         worryScore,
         showPrompt,
+        sosStatus,
         setShowPrompt,
         handlePromptYes,
         handlePromptNo,
+        handlePromptIgnore,
         triggerManualSOS,
         acknowledgeSafe,
       }}

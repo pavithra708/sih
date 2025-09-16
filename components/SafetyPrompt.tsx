@@ -23,7 +23,7 @@ export default function SafetyPrompt({
     speak("Are you safe?", language);
 
     const timer = setTimeout(() => {
-      onNo?.(true); // auto timeout
+      onNo?.(true); // auto timeout after 10s
     }, 10000);
 
     return () => clearTimeout(timer);

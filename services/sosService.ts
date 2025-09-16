@@ -1,13 +1,11 @@
 // services/sosService.ts
-import * as Crypto from 'expo-crypto';
-import { Alert } from 'react-native';
-import { Audio } from 'expo-av';
-import { Camera as ExpoCamera } from 'expo-camera';
-import React from 'react';
+import * as Crypto from "expo-crypto";
+import { Alert } from "react-native";
 
-const SOS_API = 'https://your-backend.com/api/sos';
-let lastBlockHash = 'GENESIS';
+const SOS_API = "http://192.168.19.170:5000/api/sos"; // matches your backend
+let lastBlockHash = "GENESIS";
 
+// 🔹 Create blockchain record
 const createBlockchainRecord = async (data: any) => {
   const json = JSON.stringify(data);
   const hash = await Crypto.digestStringAsync(
@@ -19,65 +17,43 @@ const createBlockchainRecord = async (data: any) => {
   return { ...data, blockHash: hash, prevHash };
 };
 
-// Audio recording
-export const recordAudio = async (): Promise<string> => {
-  try {
-    const { status } = await Audio.requestPermissionsAsync();
-    if (status !== 'granted') return '';
-
-    const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-    await recording.startAsync();
-
-    await new Promise((res) => setTimeout(res, 10000));
-    await recording.stopAndUnloadAsync();
-
-    return recording.getURI() ?? '';
-  } catch (err) {
-    console.error('Audio recording failed:', err);
-    return '';
-  }
-};
-
-// Video recording
-export const recordVideo = async (
-  cameraRef: React.RefObject<ExpoCamera>,
-  duration = 10
-): Promise<string> => {
-  if (!cameraRef.current) return '';
-  try {
-    const video = await cameraRef.current.recordAsync({ maxDuration: duration });
-    return video.uri;
-  } catch (err) {
-    console.error('Video recording failed:', err);
-    return '';
-  }
-};
-
-// Trigger SOS
+// 🔹 Trigger SOS
 export const triggerSOS = async (
+  userId: number,
   score: number,
   reason: string,
-  location: { latitude: number; longitude: number },
-  cameraRef?: React.RefObject<ExpoCamera>
+  location: { latitude: number; longitude: number }
 ) => {
-  try {
-    const audioFile = await recordAudio();
-    let videoFile = '';
-    if (cameraRef) videoFile = await recordVideo(cameraRef, 10);
+  // Only basic info from frontend
+  const sosData = { userId, timestamp: Date.now(), score, reason, location };
 
-    const sosData = { timestamp: Date.now(), score, reason, location, audioFile, videoFile };
+  try {
+    // Add blockchain info
     const block = await createBlockchainRecord(sosData);
 
-    await fetch(SOS_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    // Send to backend
+    const res = await fetch(SOS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(block),
     });
 
-    Alert.alert('🚨 SOS Triggered', 'Alert sent securely.');
-  } catch (err) {
-    console.error(err);
-    Alert.alert('Error', 'Failed to trigger SOS.');
+    const resJson = await res.json();
+
+    if (!res.ok || !resJson.success) {
+      throw new Error(resJson.message || `HTTP ${res.status}`);
+    }
+
+    console.log("✅ SOS sent successfully:", resJson.sosData);
+    Alert.alert(
+      "🚨 SOS Triggered",
+      `Alert sent securely!\n\nData:\n${JSON.stringify(resJson.sosData, null, 2)}`
+    );
+
+    return resJson.sosData; // includes full userProfile from backend
+  } catch (err: any) {
+    console.error("❌ SOS failed:", err);
+    Alert.alert("❌ SOS Failed", err.message || "Unknown error");
+    throw err;
   }
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -23,15 +23,16 @@ export default function HomeScreen() {
   const {
     worryScore,
     showPrompt,
+    sosStatus,
     setShowPrompt,
     handlePromptYes,
     handlePromptNo,
+    handlePromptIgnore,
     triggerManualSOS,
   } = useSafety();
 
   const [refreshing, setRefreshing] = useState(false);
   const [zone, setZone] = useState<Zone | null>(null);
-  const ignoreUntilRef = useRef<number>(0);
 
   useEffect(() => {
     if (!currentLocation) return;
@@ -39,8 +40,7 @@ export default function HomeScreen() {
     const currentZone = geofenceService.checkLocation(currentLocation) as Zone;
     setZone(currentZone);
 
-    const now = Date.now();
-    if (now > ignoreUntilRef.current && (currentZone?.riskLevel === "medium" || currentZone?.riskLevel === "high")) {
+    if (currentZone?.riskLevel === "medium" || currentZone?.riskLevel === "high") {
       setShowPrompt(true);
     }
   }, [currentLocation, setShowPrompt]);
@@ -65,11 +65,6 @@ export default function HomeScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const handleIgnore = () => {
-    ignoreUntilRef.current = Date.now() + 10 * 60 * 1000; // 10 min
-    setShowPrompt(false);
-  };
-
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
@@ -79,6 +74,7 @@ export default function HomeScreen() {
       >
         <Text style={styles.title}>Safety Dashboard</Text>
 
+        {/* Safety Score */}
         <View style={styles.scoreCard}>
           <Shield size={32} color={getScoreColor(safeScore)} />
           <View style={styles.scoreContent}>
@@ -89,6 +85,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Geofence Status */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <MapPin size={24} color="#2196F3" />
@@ -101,28 +98,39 @@ export default function HomeScreen() {
           <Text style={styles.zoneMessage}>{zoneStatus.message}</Text>
         </View>
 
+        {/* Emergency Contacts */}
         {Array.isArray(tourist?.emergencyContacts) && tourist.emergencyContacts.length ? (
           <View style={styles.emergencyCard}>
             <Text style={styles.emergencyTitle}>Emergency Contacts</Text>
-            {tourist.emergencyContacts.slice(0, 2).map((phone: string, i: number) => (
+            {tourist.emergencyContacts.slice(0, 2).map((c: any, i: number) => (
               <View key={i} style={styles.emergencyContact}>
-                <Text style={styles.contactPhone}>{phone}</Text>
+                <Text style={styles.contactName}>{c.name}</Text>
+                <Text style={styles.contactPhone}>{c.phone}</Text>
               </View>
             ))}
           </View>
         ) : null}
 
+        {/* SOS Button */}
         <View style={{ alignItems: "center", marginTop: 16 }}>
           <TouchableOpacity onPress={triggerManualSOS} style={styles.bigSosButton}>
             <Text style={styles.bigSosText}>🚨 SOS</Text>
           </TouchableOpacity>
+
+          {/* Live SOS status */}
+          {sosStatus ? (
+            <View style={styles.sosStatusContainer}>
+              <Text style={styles.sosStatusText}>{sosStatus}</Text>
+            </View>
+          ) : null}
         </View>
 
+        {/* Safety Prompt Modal */}
         <SafetyPrompt
           visible={showPrompt}
           onYes={handlePromptYes}
           onNo={handlePromptNo}
-          onIgnore={handleIgnore}
+          onIgnore={handlePromptIgnore}
         />
       </ScrollView>
     </View>
@@ -153,7 +161,8 @@ const styles = StyleSheet.create({
   emergencyCard: { backgroundColor: "#FFF3E0", borderRadius: 12, padding: 16, marginBottom: 16 },
   emergencyTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
   emergencyContact: { marginBottom: 6 },
-  contactPhone: { fontSize: 14, fontWeight: "600" },
+  contactName: { fontSize: 14, fontWeight: "600" },
+  contactPhone: { fontSize: 12 },
   bigSosButton: {
     width: 180,
     height: 180,
@@ -167,4 +176,12 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   bigSosText: { color: "#fff", fontSize: 36, fontWeight: "bold" },
+  sosStatusContainer: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#FFF3E0",
+    borderRadius: 8,
+  },
+  sosStatusText: { fontSize: 16, color: "#F44336", fontWeight: "600" },
 });
