@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -6,33 +6,52 @@ import {
   StyleSheet,
   RefreshControl,
   TouchableOpacity,
+  Platform,
 } from "react-native";
-import { Shield, MapPin, AlertTriangle, CheckCircle } from "lucide-react-native";
-
+import { Shield, MapPin, AlertTriangle, CheckCircle, Languages } from "lucide-react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation } from "../../contexts/LocationContext";
 import { useSafety } from "../../contexts/SafetyContext";
 import SafetyPrompt from "../../components/SafetyPrompt";
 import { geofenceService } from "../../services/geofenceService";
 
+import { useTranslation } from "react-i18next";
+import { Picker } from "@react-native-picker/picker";
+
 type Zone = { name: string; riskLevel: "low" | "medium" | "high" };
 
+const languages = [
+  { code: "en", label: "English" },
+  { code: "hi", label: "हिन्दी" },
+  { code: "kn", label: "ಕನ್ನಡ" },
+  { code: "ta", label: "தமிழ்" },
+  { code: "te", label: "తెలుగు" },
+  { code: "bn", label: "বাংলা" },
+  { code: "mr", label: "मराठी" },
+  { code: "gu", label: "ગુજરાતી" },
+  { code: "pa", label: "ਪੰਜਾਬੀ" },
+  { code: "ml", label: "മലയാളം" },
+  { code: "or", label: "ଓଡ଼ିଆ" },
+];
+
 export default function HomeScreen() {
+  const { t, i18n } = useTranslation();
+
   const { tourist } = useAuth() as any;
   const { currentLocation } = useLocation();
   const {
     worryScore,
     showPrompt,
-    sosStatus,
     setShowPrompt,
     handlePromptYes,
     handlePromptNo,
-    handlePromptIgnore,
     triggerManualSOS,
   } = useSafety();
 
   const [refreshing, setRefreshing] = useState(false);
   const [zone, setZone] = useState<Zone | null>(null);
+  const ignoreUntilRef = useRef<number>(0);
+  const [selectedLang, setSelectedLang] = useState(i18n.language);
 
   useEffect(() => {
     if (!currentLocation) return;
@@ -40,22 +59,40 @@ export default function HomeScreen() {
     const currentZone = geofenceService.checkLocation(currentLocation) as Zone;
     setZone(currentZone);
 
-    if (currentZone?.riskLevel === "medium" || currentZone?.riskLevel === "high") {
+    const now = Date.now();
+    if (
+      now > ignoreUntilRef.current &&
+      (currentZone?.riskLevel === "medium" || currentZone?.riskLevel === "high")
+    ) {
       setShowPrompt(true);
     }
   }, [currentLocation, setShowPrompt]);
+
+  // Change language using i18n from useTranslation()
+  const changeLanguage = (langCode: string) => {
+    i18n.changeLanguage(langCode);
+    setSelectedLang(langCode);
+  };
 
   const safeScore = Math.min(100, Math.max(0, worryScore));
   const getScoreColor = (score: number) =>
     score >= 80 ? "#F44336" : score >= 30 ? "#FF9800" : "#4CAF50";
 
   const zoneStatus = !zone
-    ? { icon: CheckCircle, color: "#4CAF50", title: "Safe Zone", message: "You are safe" }
+    ? {
+        icon: CheckCircle,
+        color: "#4CAF50",
+        title: t("home.safeZone"),
+        message: t("home.safeMessage"),
+      }
     : {
         icon: AlertTriangle,
         color: zone.riskLevel === "high" ? "#F44336" : "#FF9800",
-        title: zone.riskLevel === "high" ? "Danger Zone" : "Caution Zone",
-        message: `Exit zone: ${zone.name}`,
+        title:
+          zone.riskLevel === "high"
+            ? t("home.dangerZone")
+            : t("home.cautionZone"),
+        message: `${t("home.exitZone")}: ${zone.name}`,
       };
 
   const StatusIcon = zoneStatus.icon;
@@ -65,21 +102,34 @@ export default function HomeScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   };
 
+  const handleIgnore = () => {
+    ignoreUntilRef.current = Date.now() + 10 * 60 * 1000; // 10 minutes
+    setShowPrompt(false);
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        <Text style={styles.title}>Safety Dashboard</Text>
+        {/* Safety Dashboard Title */}
+        <Text style={styles.title}>{t("home.title")}</Text>
 
         {/* Safety Score */}
         <View style={styles.scoreCard}>
           <Shield size={32} color={getScoreColor(safeScore)} />
           <View style={styles.scoreContent}>
-            <Text style={styles.scoreTitle}>Safety Score</Text>
-            <Text style={[styles.scoreValue, { color: getScoreColor(safeScore) }]}>
+            <Text style={styles.scoreTitle}>{t("home.safetyScore")}</Text>
+            <Text
+              style={[
+                styles.scoreValue,
+                { color: getScoreColor(safeScore) },
+              ]}
+            >
               {`${safeScore}/100`}
             </Text>
           </View>
@@ -89,23 +139,27 @@ export default function HomeScreen() {
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <MapPin size={24} color="#2196F3" />
-            <Text style={styles.statusTitle}>Geofence</Text>
+            <Text style={styles.statusTitle}>{t("home.geofence")}</Text>
           </View>
           <View style={styles.zoneStatus}>
             <StatusIcon size={20} color={zoneStatus.color} />
-            <Text style={[styles.zoneText, { color: zoneStatus.color }]}>{zoneStatus.title}</Text>
+            <Text style={[styles.zoneText, { color: zoneStatus.color }]}>
+              {zoneStatus.title}
+            </Text>
           </View>
           <Text style={styles.zoneMessage}>{zoneStatus.message}</Text>
         </View>
 
         {/* Emergency Contacts */}
-        {Array.isArray(tourist?.emergencyContacts) && tourist.emergencyContacts.length ? (
+        {Array.isArray(tourist?.emergencyContacts) &&
+        tourist.emergencyContacts.length ? (
           <View style={styles.emergencyCard}>
-            <Text style={styles.emergencyTitle}>Emergency Contacts</Text>
-            {tourist.emergencyContacts.slice(0, 2).map((c: any, i: number) => (
+            <Text style={styles.emergencyTitle}>
+              {t("home.emergencyContacts")}
+            </Text>
+            {tourist.emergencyContacts.slice(0, 2).map((phone: string, i: number) => (
               <View key={i} style={styles.emergencyContact}>
-                <Text style={styles.contactName}>{c.name}</Text>
-                <Text style={styles.contactPhone}>{c.phone}</Text>
+                <Text style={styles.contactPhone}>{phone}</Text>
               </View>
             ))}
           </View>
@@ -116,13 +170,34 @@ export default function HomeScreen() {
           <TouchableOpacity onPress={triggerManualSOS} style={styles.bigSosButton}>
             <Text style={styles.bigSosText}>🚨 SOS</Text>
           </TouchableOpacity>
+        </View>
 
-          {/* Live SOS status */}
-          {sosStatus ? (
-            <View style={styles.sosStatusContainer}>
-              <Text style={styles.sosStatusText}>{sosStatus}</Text>
-            </View>
-          ) : null}
+        {/* Language Selector - moved BELOW SOS */}
+        <View style={styles.languageSelectorContainer}>
+          <View style={styles.languageHeader}>
+            <Languages size={20} color="#2196F3" />
+            <Text style={styles.languageSelectorLabel}>
+              {t("settings.language")}
+            </Text>
+          </View>
+          <View style={styles.languagePickerWrapper}>
+            <Picker
+              selectedValue={selectedLang}
+              onValueChange={(value) => changeLanguage(value)}
+              mode="dropdown"
+              style={
+                Platform.OS === "ios" ? styles.pickerIOS : styles.pickerAndroid
+              }
+            >
+              {languages.map((lang) => (
+                <Picker.Item
+                  key={lang.code}
+                  label={lang.label}
+                  value={lang.code}
+                />
+              ))}
+            </Picker>
+          </View>
         </View>
 
         {/* Safety Prompt Modal */}
@@ -130,7 +205,7 @@ export default function HomeScreen() {
           visible={showPrompt}
           onYes={handlePromptYes}
           onNo={handlePromptNo}
-          onIgnore={handlePromptIgnore}
+          onIgnore={handleIgnore}
         />
       </ScrollView>
     </View>
@@ -161,27 +236,48 @@ const styles = StyleSheet.create({
   emergencyCard: { backgroundColor: "#FFF3E0", borderRadius: 12, padding: 16, marginBottom: 16 },
   emergencyTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
   emergencyContact: { marginBottom: 6 },
-  contactName: { fontSize: 14, fontWeight: "600" },
-  contactPhone: { fontSize: 12 },
+  contactPhone: { fontSize: 14, fontWeight: "600" },
   bigSosButton: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: "#F44336",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "#D32F2F",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
     shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  bigSosText: { color: "#fff", fontSize: 36, fontWeight: "bold" },
-  sosStatusContainer: {
-    marginTop: 8,
-    paddingVertical: 6,
+  bigSosText: { color: "#fff", fontSize: 32, fontWeight: "bold", letterSpacing: 1 },
+  languageSelectorContainer: {
+    marginTop: 24,
+    marginBottom: 24,
     paddingHorizontal: 12,
-    backgroundColor: "#FFF3E0",
-    borderRadius: 8,
   },
-  sosStatusText: { fontSize: 16, color: "#F44336", fontWeight: "600" },
+  languageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  languageSelectorLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  languagePickerWrapper: {
+    backgroundColor: "#fdcfcfff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    overflow: "hidden",
+  },
+  pickerIOS: {
+    height: 150,
+    width: "100%",
+  },
+  pickerAndroid: {
+    height: 70,
+    width: "100%",
+  },
 });

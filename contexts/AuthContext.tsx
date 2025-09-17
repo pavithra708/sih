@@ -1,14 +1,24 @@
+// /contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+interface EmergencyContact {
+  name: string;
+  phone: string;
+  relationship: string;
+}
+
 interface TouristProfile {
-  id: string; // ✅ always store as string
+  id: string;
   name: string;
   email: string;
   phone?: string;
   digitalId?: any;
   isTrackingEnabled?: boolean;
+  tripEndDate?: string;
+  itinerary?: string[];
+  emergencyContacts?: EmergencyContact[];
 }
 
 interface AuthContextType {
@@ -16,11 +26,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (
-    user: TouristProfile,
-    token: string,
-    encryptedPrivateKey?: string
-  ) => Promise<void>;
+  register: (user: TouristProfile, token: string, encryptedPrivateKey?: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   updateTourist: (updates: Partial<TouristProfile>) => Promise<void>;
@@ -46,7 +52,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const tkn = await SecureStore.getItemAsync("token");
         if (userStr) {
           const parsed = JSON.parse(userStr);
-          setTourist({ ...parsed, id: String(parsed.id) }); // ✅ normalize id
+          setTourist({
+            ...parsed,
+            id: String(parsed.id),
+            itinerary: parsed.itinerary || [],
+            emergencyContacts: parsed.emergencyContacts || [],
+          });
         }
         if (tkn) setToken(tkn);
       } catch (e) {
@@ -57,7 +68,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     })();
   }, []);
 
-  const SERVER_IP = "192.168.19.170"; // ✅ replace with your PC's LAN IP
+  const SERVER_IP = "192.168.0.201";
   const SERVER_PORT = "5000";
 
   const login = async (email: string, password: string) => {
@@ -75,10 +86,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const { user, token: tkn } = await res.json();
 
-      // ✅ Normalize id
       const normalizedUser: TouristProfile = {
         ...user,
         id: String(user.id),
+        itinerary: user.itinerary || [],
+        emergencyContacts: user.emergencyContacts || [],
       };
 
       setTourist(normalizedUser);
@@ -92,10 +104,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const register = async (user: TouristProfile, token: string, encryptedPrivateKey?: string) => {
-    // ✅ Normalize id
     const normalizedUser: TouristProfile = {
       ...user,
       id: String(user.id),
+      itinerary: user.itinerary || [],
+      emergencyContacts: user.emergencyContacts || [],
     };
 
     setTourist(normalizedUser);
@@ -118,14 +131,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateTourist = async (updates: Partial<TouristProfile>) => {
     if (!tourist) return;
-
-    // ✅ Normalize id again
     const updated: TouristProfile = {
       ...tourist,
       ...updates,
+      itinerary: updates.itinerary ?? tourist.itinerary ?? [],
+      emergencyContacts: updates.emergencyContacts ?? tourist.emergencyContacts ?? [],
       id: String(updates.id ?? tourist.id),
     };
-
     setTourist(updated);
     await AsyncStorage.setItem("user", JSON.stringify(updated));
   };

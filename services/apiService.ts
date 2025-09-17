@@ -1,5 +1,5 @@
 // services/apiService.ts
-const API_BASE = "http://192.168.19.170:5000"; // replace with your backend
+const API_BASE = "http://192.168.0.201:5000"; // replace with your backend
 
 export const apiService = {
   updateLocation: async (touristId: string | number | null, location: any) => {

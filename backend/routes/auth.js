@@ -1,4 +1,3 @@
-// backend/routes/auth.js
 import express from "express";
 import multer from "multer";
 import bcrypt from "bcryptjs";
@@ -40,7 +39,7 @@ router.post("/register-multipart", upload.single("kycImage"), async (req, res) =
     const tourist = {
       name: body.name,
       email: body.email,
-      password: passwordHash,   // ✅ consistent field name
+      password: passwordHash,
       phone: body.phone,
       aadhaarPassport: body.aadhaarPassport
         ? encrypt(body.aadhaarPassport)
@@ -49,10 +48,12 @@ router.post("/register-multipart", upload.single("kycImage"), async (req, res) =
         : body.detectedPassport
         ? encrypt(body.detectedPassport)
         : null,
-      itinerary: body.itinerary || null,
+      itinerary: body.itinerary ? JSON.parse(body.itinerary) : [],   // ✅ always array
       tripStartDate: body.tripStartDate,
       tripEndDate: body.tripEndDate,
-      emergencyContacts: body.emergencyContacts,
+      emergencyContacts: body.emergencyContacts
+        ? JSON.parse(body.emergencyContacts)
+        : [],                                                       // ✅ always array
       kycImagePath: req.file ? req.file.path : null,
       publicKey: body.publicKey || null,
       encryptedPrivateKey: body.encryptedPrivateKey || null,
@@ -61,7 +62,16 @@ router.post("/register-multipart", upload.single("kycImage"), async (req, res) =
     };
 
     const newUser = await registerTourist(tourist);
-    return res.json({ ok: true, user: newUser, token: "dummy-token" });
+
+    return res.json({
+      ok: true,
+      user: {
+        ...newUser,
+        itinerary: newUser.itinerary || [],
+        emergencyContacts: newUser.emergencyContacts || [],
+      },
+      token: "dummy-token",
+    });
   } catch (err) {
     console.error(err);
     res
@@ -77,25 +87,26 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Lookup tourist in DB
     const tourist = await findTouristByEmail(email);
     if (!tourist) {
       return res.status(401).json({ ok: false, error: "User not found" });
     }
 
-    // Compare password with hashed password in DB
     const valid = await bcrypt.compare(password, tourist.password);
     if (!valid) {
       return res.status(401).json({ ok: false, error: "Invalid credentials" });
     }
 
-    // Return dummy token for now
     return res.json({
       ok: true,
       user: {
         id: tourist.id,
         name: tourist.name,
         email: tourist.email,
+        itinerary: tourist.itinerary ? JSON.parse(tourist.itinerary) : [],          // ✅ normalize
+        emergencyContacts: tourist.emergencyContacts
+          ? JSON.parse(tourist.emergencyContacts)
+          : [],                                                                     // ✅ normalize
       },
       token: "dummy-token",
     });
