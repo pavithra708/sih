@@ -1,9 +1,9 @@
 import express from "express";
-import dbPromise from "../db.js";
+import dbPromise from "../db.js"; 
+import AlertMongo from "../models/alert.mongo.js";
 
 const router = express.Router();
 
-// Create SOS alert and send full user details to police dashboard
 router.post("/", async (req, res) => {
   try {
     const db = await dbPromise;
@@ -18,17 +18,19 @@ router.post("/", async (req, res) => {
       userId,
     } = req.body;
 
-    // 1️⃣ Save basic alert in DB
+    if (!userId || !reason) return res.status(400).json({ error: "userId and reason required" });
+
+    // Save in SQLite
     const result = await db.run(
       `INSERT INTO alerts (userId, message, location, blockchainHash) VALUES (?, ?, ?, ?)`,
       [userId, reason, JSON.stringify(location), blockHash]
     );
 
-    // 2️⃣ Fetch full user details for police dashboard
+    // Fetch full user details
     const user = await db.get("SELECT * FROM users WHERE id = ?", [userId]);
-    if (!user) return res.status(404).json({ success: false, error: "User not found" });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    // 3️⃣ Build full SOS payload
+    // Build full payload
     const sosData = {
       id: result.lastID,
       userId,
@@ -42,20 +44,27 @@ router.post("/", async (req, res) => {
       userProfile: {
         name: user.name,
         phone: user.phone,
-        emergencyContacts: user.emergencyContacts, // JSON array or string
+        emergencyContacts: Array.isArray(user.emergencyContacts) 
+          ? user.emergencyContacts 
+          : [user.emergencyContacts],
         digitalId: user.aadhaarPassport || user.digitalIdHash,
       },
       timestamp: new Date().toISOString(),
     };
 
-    // 4️⃣ Emit to all police dashboards via socket.io
+    // Save **entire payload** in MongoDB
+    const mongoAlert = new AlertMongo(sosData);
+    await mongoAlert.save();
+
+    console.log("✅ SOS sent successfully:", sosData); // logs same as mobile app
+
+    // Emit to police dashboard
     req.io.emit("new_sos", sosData);
 
-    // 5️⃣ Return success
-    res.json({ success: true, sosData });
+    res.status(201).json({ success: true, sosData });
   } catch (err) {
     console.error("❌ Failed to save SOS:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

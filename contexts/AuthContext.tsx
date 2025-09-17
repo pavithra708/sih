@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     })();
   }, []);
 
-  const SERVER_IP = "192.168.0.201";
+  const SERVER_IP = "192.168.19.170";
   const SERVER_PORT = "5000";
 
   const login = async (email: string, password: string) => {

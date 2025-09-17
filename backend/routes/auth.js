@@ -8,6 +8,24 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
 /**
+ * ✅ Utility: safe JSON parse
+ */
+function safeParse(data, fallback = []) {
+  try {
+    if (!data) return fallback;
+    if (typeof data === "string") {
+      return JSON.parse(data);
+    }
+    if (typeof data === "object") {
+      return data;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * ✅ Dummy KYC verification endpoint
  */
 router.post("/kyc-verify", upload.single("kycImage"), async (req, res) => {
@@ -48,12 +66,10 @@ router.post("/register-multipart", upload.single("kycImage"), async (req, res) =
         : body.detectedPassport
         ? encrypt(body.detectedPassport)
         : null,
-      itinerary: body.itinerary ? JSON.parse(body.itinerary) : [],   // ✅ always array
+      itinerary: safeParse(body.itinerary, []),            // ✅ safe parse
       tripStartDate: body.tripStartDate,
       tripEndDate: body.tripEndDate,
-      emergencyContacts: body.emergencyContacts
-        ? JSON.parse(body.emergencyContacts)
-        : [],                                                       // ✅ always array
+      emergencyContacts: safeParse(body.emergencyContacts, []), // ✅ safe parse
       kycImagePath: req.file ? req.file.path : null,
       publicKey: body.publicKey || null,
       encryptedPrivateKey: body.encryptedPrivateKey || null,
@@ -67,8 +83,8 @@ router.post("/register-multipart", upload.single("kycImage"), async (req, res) =
       ok: true,
       user: {
         ...newUser,
-        itinerary: newUser.itinerary || [],
-        emergencyContacts: newUser.emergencyContacts || [],
+        itinerary: safeParse(newUser.itinerary, []),
+        emergencyContacts: safeParse(newUser.emergencyContacts, []),
       },
       token: "dummy-token",
     });
@@ -103,10 +119,8 @@ router.post("/login", async (req, res) => {
         id: tourist.id,
         name: tourist.name,
         email: tourist.email,
-        itinerary: tourist.itinerary ? JSON.parse(tourist.itinerary) : [],          // ✅ normalize
-        emergencyContacts: tourist.emergencyContacts
-          ? JSON.parse(tourist.emergencyContacts)
-          : [],                                                                     // ✅ normalize
+        itinerary: safeParse(tourist.itinerary, []),            // ✅ safe parse
+        emergencyContacts: safeParse(tourist.emergencyContacts, []), // ✅ safe parse
       },
       token: "dummy-token",
     });

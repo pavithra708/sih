@@ -2,7 +2,7 @@
 import * as Crypto from "expo-crypto";
 import { Alert } from "react-native";
 
-const SOS_API = "http://192.168.0.201:5000/api/sos"; // matches your backend
+const SOS_API = "http://192.168.19.170:5000/api/sos"; // matches your backend
 let lastBlockHash = "GENESIS";
 
 // 🔹 Create blockchain record

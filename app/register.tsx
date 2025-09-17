@@ -16,7 +16,7 @@ import { router } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { hashDataSHA256 } from "../utils/hashUtils";
 
-const API_BASE = "http://192.168.0.201:5000";
+const API_BASE = "http://192.168.19.170:5000";
 
 interface EmergencyContact {
   name: string;
@@ -199,7 +199,7 @@ export default function RegisterScreen() {
       );
 
       Alert.alert("Registered", "Account created successfully.", [
-        { text: "Continue", onPress: () => router.replace("/profile") },
+        { text: "Continue", onPress: () => router.replace("/login") },
       ]);
     } catch (err: any) {
       Alert.alert("Register error", err.message || "Something went wrong");
